@@ -1,0 +1,374 @@
+---
+title: "Covid 19"
+author: "Sumithra Hari"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# sSetting the working directory
+
+```{r cars}
+setwd("C:/UNCG/IAF 601 Predictive Analytics/Project")
+```
+
+# Importing libraries
+
+```{r}
+library(readr)
+library(dplyr)
+#library(tidyverse)
+library(stringr)
+library(lubridate)
+```
+
+
+```{r}
+
+
+install.packages("rsample")
+library(rsample)
+install.packages("cutpointr")
+library(cutpointr)
+
+
+```
+
+
+#Importing covid data
+```{r}
+covid19 <- read_csv("covid_data.csv")
+
+```
+
+## Exploring data
+
+```{r}
+
+head(covid19) # first 5 observation
+tail(covid19) # last five observations
+dim(covid19)  # No. of observations and Variables
+names(covid19) # Variable names 
+str(covid19)   # list the variable types
+summary(covid19) # number of null values and statistics of the variable present
+spec(covid19)   #to retrieve the full column specification for this data
+
+```
+
+# Removing the columns which has no relevance in our part of analysis and also the ones which has more than 75% null values
+
+```{r}
+covid19_new <-covid19 %>% select(-c(continent,iso_code,new_cases_smoothed,new_deaths_smoothed,
+                                new_cases_smoothed_per_million,weekly_icu_admissions,
+                                weekly_icu_admissions_per_million,weekly_hosp_admissions,
+                                new_tests_smoothed,new_tests_smoothed_per_thousand,
+                                tests_per_case,tests_units,total_vaccinations,total_boosters,
+                                new_vaccinations,new_vaccinations_smoothed,total_vaccinations_per_hundred,
+                                total_boosters_per_hundred,new_vaccinations_smoothed_per_million,
+                                new_people_vaccinated_smoothed,new_people_vaccinated_smoothed_per_hundred,
+                                aged_70_older,gdp_per_capita,handwashing_facilities,hospital_beds_per_thousand,
+                                life_expectancy,human_development_index,excess_mortality_cumulative_absolute,
+                                excess_mortality_cumulative,excess_mortality,excess_mortality_cumulative_per_million))
+```
+
+
+
+```{r}
+dim(covid19_new)
+```
+# Lets explore location variable
+
+```{r}
+unique((covid19_new["location"]))
+```
+# There are 244 unique locations
+# From the above analysis some names of the location are found to be like World, High Income, low Income, Lower Middle income
+#Upper middle Income
+
+# Analysing the rows which has the location names like High Income, Low Income,Lower Middle Income, upper middle income and world
+```{r}
+
+covid19_Unique_locNames <- covid19_new %>% 
+  #na.omit() %>%
+  select(date,location, total_cases, total_deaths) %>%
+  mutate(month=month(date, label=TRUE)) %>%
+  group_by(month) %>%
+  filter(location %in% c("World", "High income", "Low income", "Lower middle income", "Upper middle income")) %>%
+  summarize(mean_total_cases= mean(total_cases, na.rm=TRUE), mean_total_deaths= mean(total_deaths, na.rm=TRUE))
+covid19_Unique_locNames 
+options(scipen=999)  # turn-off scientific notation like 1e+48
+theme_set(theme_bw())  # pre-set the bw theme.
+
+
+# Scatterplot
+gg <- ggplot(covid19_Unique_locNames, aes(month,mean_total_cases)) + 
+  geom_point(aes(size=mean_total_deaths))+ 
+  geom_smooth(method="loess", se=F) + 
+  
+  labs(subtitle="Month Vs Total Cases", 
+       y="Total Cases", 
+       x="Month", 
+       title="Scatterplot", 
+       caption = "")
+gg
+```
+
+# Monthly average number of total cases 
+
+```{r}
+
+
+covid19_monthWise <- covid19%>% 
+                         mutate(month=month(date, label=TRUE))%>%
+                         group_by(month)%>%
+                         filter(location %in% c("World", "High income", "Low income", "Lower middle income", "Upper middle income"))%>%
+                        
+                         summarize(average_cases= mean(total_cases, na.rm=TRUE))
+
+covid19_monthWise
+
+
+```
+
+# Monthwise covid_cases
+```{r}
+ggplot(covid19_monthWise, aes(x=month, y=average_cases))+
+  geom_bar(stat = "identity", fill="lightblue")+
+  xlab("") +ylab("")+
+  
+  scale_y_continuous(breaks = scales::pretty_breaks(n =10),labels = scales::comma)+
+  #coord_cartesian(ylim = c(0, 1600), xlim = c(1995, 2015))+
+  #expand_limits(y = 0) + 
+  #expand_limits(x = 1) +
+  labs( 
+       caption="Monthly Covid Cases")
+   
+```
+# removing  the location names like world , high income, low income, lower middle income, upper middle income and also the continenets from the locations
+
+```{r}
+
+covid19 <- covid19 %>%
+  filter(!(location %in% c("World", "High income", "Low income", "Lower middle income", "Upper middle income", "Asia",
+                           "South Africa", "North America", "South America", "Europe", "Australia", "Oceania")))
+unique(covid19$location)
+```
+
+
+```{r}
+
+covid19_countries <- covid19 %>% 
+  select(location, date, total_cases, total_deaths,icu_patients, hosp_patients) %>%
+  mutate(month=month(date, label=TRUE))%>%
+  group_by(location) %>%
+  summarize(icu_admissions=sum(icu_patients, na.rm=TRUE)/1000000, 
+            hosp_admissions=sum(hosp_patients, na.rm=TRUE)/1000000, 
+            total_cases_per_millions=sum(total_cases, na.rm=TRUE)/1000000, total_deaths_per_millions=sum(total_deaths, na.rm=TRUE)/1000000)%>%
+  arrange(desc(icu_admissions)) %>%
+  top_n(10)
+covid19_countries
+# Extract specific country: Italy
+#italy <- country %>% filter(Country.Region=="Italy")
+```
+# From them the above analysis united states, Italy and United kingdom stads the highest in ICU admissions and hospital admissions but the total number of deaths were higher in European union, United states Brazil and India
+
+```{r}
+covid19_countries %>%
+  arrange(desc(total_deaths_per_millions)) %>%
+  top_n(10)
+  
+```
+## Top 20 locations having mean total number of cases
+```{r}
+
+covid19_top_mean_cases <- covid19 %>% 
+  #select(location, population) %>%
+  group_by(location,population)%>%
+  
+  summarise( mean_cases= mean(total_cases)) %>%
+  arrange(desc(mean_cases))%>%
+  top_n(20)
+covid19_top_mean_cases
+covid19_least_mean_cases <- covid19 %>% 
+  group_by(location,population)%>%
+  
+  summarise( mean_cases= mean(total_cases)) %>%
+  arrange(mean_cases)%>%
+  top_n(20) 
+covid19_least_mean_cases 
+
+```
+
+# Average number of cases and deaths, percentage of deaths compared to total cases grouped by lacation and month
+```{r}
+covid19_loc_month <- covid19 %>% 
+                          select(date,location, total_cases, total_deaths) %>%
+                          mutate(month=month(date))%>%
+                          group_by(month, location)%>%
+                          filter(location %in% c("World", "High income", "Low income", "Lower middle income", "Upper middle income"))%>%
+                          summarise(mean_total_cases= mean(total_cases, na.rm=TRUE),
+                                    mean_total_deaths=mean(total_deaths, na.rm=TRUE),
+                                    percentage_deaths=mean_total_deaths/mean_total_cases*100)
+covid19_loc_month
+```
+
+#Exploring covid19 related to median age
+
+```{r}
+summary(covid19["median_age"])
+
+```
+
+# The min and the max age is found to 15.1 and 48.2 respectively
+# There are 39720 null values in the median_age column
+
+```{r}
+covid19_age <- covid19_new %>% 
+  select( location, median_age, total_cases,total_deaths,cardiovasc_death_rate,diabetes_prevalence) %>%
+  na.omit()  
+covid19_age
+        
+```
+
+# We split the median_age into 4 age groups to see the total number of cases in each age group.
+
+```{r}
+summary(covid19_age)
+
+#Total cases for the ages <18
+covid19_age %>%
+   filter(median_age<=18 )%>%
+  count()  #12399
+
+#Total cases for the ages between 18 and 40
+covid19_age %>% 
+  select(total_cases,median_age)%>%
+  filter(median_age>18 & median_age<=30 )%>% 
+  count()  #71341
+
+covid19_age %>% 
+  select(total_cases,median_age)%>%
+  filter(median_age>30 & median_age< 40 )%>% 
+  count()   #45370
+
+
+#Total cases for the ages between 40 and 50
+
+covid19_age %>% 
+  select(total_cases,median_age)%>%
+  filter(median_age>40 & median_age< 65)%>% 
+  count()      #37778
+
+```
+
+# Creating categorical variable for median_age
+
+```{r}
+covid19_ageGroups <-  covid19_age %>%
+                    mutate(median_age= as.factor(ifelse(median_age <= 18, '<= 18',
+                          ifelse(median_age >18 & median_age<=30, '18-30', 
+                          ifelse(median_age >30 & median_age<=40, '30-40', 
+                          ifelse(median_age >40 & median_age<=50, '40-50',0))))))%>%
+  na.omit()
+covid19_ageGroups
+
+summary(covid19_ageGroups)
+```
+```{r}
+# prep frequency table
+freqtable <- table(covid19_ageGroups$median_age)
+df <- as.data.frame.table(freqtable)
+head(df)
+```
+
+
+```{r}
+library(ggplot2)
+
+
+theme_set(theme_classic())
+
+# Plot
+g <- ggplot(df, aes(Var1, Freq))  #"tomato2"
+g + geom_bar(stat="identity", width = 0.5, fill= "tomato2") + 
+      xlab("Agegroup") + ylab("count")
+      labs(title="Covid 19 ", 
+           subtitle="AgeGroup Vs covid19", 
+           caption="Source: https://ourworldindata.org/coronavirus") +
+      theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+# What is the total number of deaths of among people of different age groups related to factors such as diseases?
+
+
+```{r}
+covid19_ageGroups %>% 
+  group_by(median_age)%>%
+  summarise(total_cases=mean(total_cases, na.rm=TRUE), total_deaths=mean(total_deaths, na.rm=TRUE), 
+            cardiovasc_death_rate = mean(cardiovasc_death_rate, na.rm=TRUE),
+            diabetes_prevalence = mean(diabetes_prevalence, na.rm= TRUE))
+  
+
+```
+
+```{r}
+covid19_ageGroups
+```
+```{r}
+# using set.seed to obtain the same result for every attempt.
+set.seed(645)
+
+# Random split data into train set (70%) and test set (30%)
+covid19_split <- initial_split(covid19_ageGroups, prop = 0.7)
+covid19_train <- training(covid19_split)
+covid19_test <- testing(covid19_split)
+
+
+# creating linear regression
+covid19_lm <- lm(total_deaths ~ . -location-total_deaths, data = covid19_train)
+summary(covid19_lm)
+# Make predictions
+predictions <- covid19_lm %>% predict(covid19_test)
+
+
+```
+
+
+#From the output above, the coefficients table shows the beta coefficient estimates and their significance levels. Columns are:
+
+#Estimate: the intercept (b0) and the beta coefficient estimates associated to each predictor variable
+#Std.Error: the standard error of the coefficient estimates. This represents the accuracy of the coefficients. The larger the standard error, the less confident we are about the estimate.
+#t value: the t-statistic, which is the coefficient estimate (column 2) divided by the standard error of the estimate (column 3)
+#Pr(>|t|): The p-value corresponding to the t-statistic. The smaller the p-value, the more significant the estimate is.
+
+```{r}
+
+## Random Forest Model
+
+covid19_rf <- randomForest(total_deaths ~ . - total_deaths, data = covid19_ageGroups, ntree = 1000, importance=TRUE)
+
+plot(covid19_rf)
+varImpPlot(covid19_rf)
+summary(covid19_rf)
+
+#to validate our model using the test data
+predicted <- predict(covid19_rf, newdata = covid19_test)
+#Cross-classification table shows the true positive and true negative values of the test dataset
+table(predicted, covid19_test$total_deaths)
+
+predictions <- as.numeric(predict(covid19_rf, covid19_test, type="response"))
+predictions
+
+
+# Calculating AUC
+auc <- performance(pred, measure = "auc")@y.values[[1]]
+auc 
+
+```
+
+
+
+
+
+
